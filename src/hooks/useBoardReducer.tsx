@@ -77,8 +77,10 @@ export default function useBoardReducer() {
     dispatch({ type: 'ASSIGN_USER', payload: { id, assignedTo, actor } })
   }, [])
 
-  const addUser = useCallback((name: string, email: string, role: User['role'], actor: string) => {
-    dispatch({ type: 'ADD_USER', payload: { name, email, role, actor } })
+  const addUser = useCallback((name: string, email: string, role: User['role'], actor: string, id?: string) => {
+    const userId = id ?? `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    dispatch({ type: 'ADD_USER', payload: { id: userId, name, email, role, actor } })
+    return userId
   }, [])
 
   const editUser = useCallback((id: string, updates: Partial<Pick<User, 'name' | 'email' | 'role'>>, actor: string) => {

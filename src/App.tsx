@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import useBoardReducer from './hooks/useBoardReducer'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AdminDashboard from './components/Admin/AdminDashboard'
@@ -9,11 +9,173 @@ import EditModal from './components/EditModal'
 import { COLUMNS, type Card, type ColumnKey, type Priority } from './utils/constants'
 import './App.css'
 
+type AuthMode = 'login' | 'register'
+
+const defaultPasswords: Record<string, string> = {
+  'admin@kanban.local': 'admin123',
+}
+
 const initialFilters: UserFilters = {
   query: '',
   priority: 'all',
   assignedTo: 'all',
   status: 'all',
+}
+
+function getStoredPasswords(): Record<string, string> {
+  try {
+    return {
+      ...defaultPasswords,
+      ...JSON.parse(localStorage.getItem('kanban_user_passwords') ?? '{}'),
+    }
+  } catch {
+    return defaultPasswords
+  }
+}
+
+function saveStoredPassword(email: string, password: string) {
+  const passwords = getStoredPasswords()
+  passwords[email.trim().toLowerCase()] = password
+  localStorage.setItem('kanban_user_passwords', JSON.stringify(passwords))
+}
+
+function AuthScreen({
+  users,
+  onLogin,
+  onRegister,
+}: {
+  users: ReturnType<typeof useAuth>['users']
+  onLogin: (id: string) => void
+  onRegister: (name: string, email: string, password: string) => string
+}) {
+  const [mode, setMode] = useState<AuthMode>('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
+  const [error, setError] = useState('')
+
+  const isRegistering = mode === 'register'
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const cleanPassword = password.trim()
+
+    if (!normalizedEmail || !cleanPassword || (isRegistering && !name.trim())) {
+      setError('Please fill all required fields.')
+      return
+    }
+
+    if (isRegistering) {
+      if (cleanPassword.length < 4) {
+        setError('Password must be at least 4 characters.')
+        return
+      }
+
+      const userId = onRegister(name.trim(), normalizedEmail, cleanPassword)
+      onLogin(userId)
+      return
+    }
+
+    const matchedUser = users.find((user) => user.email.toLowerCase() === normalizedEmail)
+    const passwords = getStoredPasswords()
+
+    if (!matchedUser || !passwords[normalizedEmail]) {
+      setMode('register')
+      setError('Account not registered. Please create your account first.')
+      return
+    }
+
+    if (passwords[normalizedEmail] !== cleanPassword) {
+      setError('Invalid password.')
+      return
+    }
+
+    onLogin(matchedUser.id)
+
+    if (!rememberMe) {
+      window.setTimeout(() => {
+        try {
+          localStorage.removeItem('kanban_current_user')
+        } catch {
+          // ignore
+        }
+      }, 0)
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <h1>{isRegistering ? 'Register' : 'Login'}</h1>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {isRegistering && (
+            <label className="auth-field">
+              <span>Name</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
+            </label>
+          )}
+
+          <label className="auth-field">
+            <span>Email</span>
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              inputMode="email"
+              autoFocus
+            />
+          </label>
+
+          <label className="auth-field">
+            <span className="auth-label-row">
+              Password
+              {!isRegistering && <button type="button" className="auth-link">Forgot password?</button>}
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={isRegistering ? 'new-password' : 'current-password'}
+            />
+          </label>
+
+          {!isRegistering && (
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+              />
+              <span>Remember me</span>
+            </label>
+          )}
+
+          {error && <div className="auth-error">{error}</div>}
+
+          <button type="submit" className="auth-submit">
+            {isRegistering ? 'Register' : 'Log In'}
+          </button>
+        </form>
+
+        <div className="auth-switch">
+          {isRegistering ? 'Already registered?' : 'Not registered yet?'}
+          <button
+            type="button"
+            onClick={() => {
+              setMode(isRegistering ? 'login' : 'register')
+              setError('')
+            }}
+          >
+            {isRegistering ? 'Go to login' : 'Create account'}
+          </button>
+        </div>
+      </section>
+    </main>
+  )
 }
 
 function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
@@ -40,6 +202,14 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
   const [defaultColumn, setDefaultColumn] = useState<ColumnKey | undefined>(undefined)
 
   const currentUserId = currentUser?.id ?? 'admin'
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      setSelectedPanel('admin')
+    } else {
+      setSelectedPanel('user')
+    }
+  }, [currentUser?.id, currentUser?.role])
 
   const handleMove = async (id: string, to: any, from: any) => {
     try {
@@ -88,29 +258,20 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
 
   if (!currentUser) {
     return (
-      <main className="login-shell">
-        <div className="login-card glass-panel">
-          <div className="login-logo">🌌</div>
-          <h2>Welcome Workspace</h2>
-          <p>Sign in to manage your task columns and track project lifecycle</p>
-          <div className="login-grid">
-            {users.map((user) => (
-              <button key={user.id} className="login-user-button" onClick={() => login(user.id)}>
-                <div className="login-user-info">
-                  <div className="avatar-circle">
-                    {user.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{user.name}</div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{user.email}</div>
-                  </div>
-                </div>
-                <span className={`login-role-badge ${user.role}`}>{user.role}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
+      <AuthScreen
+        users={users}
+        onLogin={login}
+        onRegister={(name, email, password) => {
+          saveStoredPassword(email, password)
+          const existingUser = state.users.find((user) => user.email.toLowerCase() === email)
+
+          if (existingUser) {
+            return existingUser.id
+          }
+
+          return addUser(name, email, 'user', 'registration')
+        }}
+      />
     )
   }
 
@@ -119,7 +280,13 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
       <TopNav currentUser={currentUser} onLogout={logout} onSwitchPanel={setSelectedPanel} activePanel={selectedPanel} />
       {selectedPanel === 'admin' && currentUser.role === 'admin' ? (
         <div className="admin-shell">
-          <AdminDashboard boardState={state} />
+          <AdminDashboard
+            boardState={state}
+            onCreateTask={handleCreateTaskTrigger}
+            onEditTask={handleEditTaskTrigger}
+            onDeleteTask={(id) => deleteCard(id, currentUserId)}
+            onAssignTask={(cardId, assignedTo) => assignUser(cardId, assignedTo, currentUserId)}
+          />
           <UserManagement
             users={state.users}
             onAdd={(name, email, role) => addUser(name, email, role, currentUserId)}

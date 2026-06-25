@@ -16,7 +16,7 @@ export type BoardAction =
   | { type: 'RESOLVE_MOVE'; payload: { id: string; from: ColumnKey; to: ColumnKey; actor: string } }
   | { type: 'ROLLBACK_MOVE'; payload: { id: string; from: ColumnKey; reason: string } }
   | { type: 'ASSIGN_USER'; payload: { id: string; assignedTo: string; actor: string } }
-  | { type: 'ADD_USER'; payload: { name: string; email: string; role: User['role']; actor: string } }
+  | { type: 'ADD_USER'; payload: { id?: string; name: string; email: string; role: User['role']; actor: string } }
   | { type: 'EDIT_USER'; payload: { id: string; updates: Partial<Pick<User, 'name' | 'email' | 'role'>>; actor: string } }
   | { type: 'DELETE_USER'; payload: { id: string; actor: string } }
 
@@ -146,7 +146,7 @@ function reducer(state: BoardState, action: BoardAction): BoardState {
     }
     case 'ADD_USER': {
       const user: User = {
-        id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: action.payload.id ?? `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         name: action.payload.name,
         email: action.payload.email,
         role: action.payload.role,
