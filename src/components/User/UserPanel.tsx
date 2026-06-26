@@ -16,6 +16,7 @@ type Props = {
   cards: Card[]
   users: User[]
   currentUserId: string
+  canCreateTask: boolean
   columns: { key: ColumnKey; title: string }[]
   filters: UserFilters
   onFiltersChange: (filters: UserFilters) => void
@@ -32,6 +33,7 @@ type Props = {
 function UserPanel({
   cards,
   users,
+  canCreateTask,
 
   columns,
   filters,
@@ -55,10 +57,14 @@ function UserPanel({
           <p>Organize, prioritize, and track your active tasks.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <button className="primary" onClick={() => onCreateTask('todo')}>
-            <Plus size={16} />
-            <span>Create Task</span>
-          </button>
+          {canCreateTask ? (
+            <button className="primary" onClick={() => onCreateTask('todo')}>
+              <Plus size={16} />
+              <span>Create Task</span>
+            </button>
+          ) : (
+            <span className="login-role-badge user">Task creation is admin only</span>
+          )}
         </div>
       </div>
 

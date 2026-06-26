@@ -190,6 +190,7 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
     editUser,
     deleteUser,
     isPending,
+    isLoading,
   } = board
   const { currentUser, login, logout, users } = useAuth()
   const [selectedPanel, setSelectedPanel] = useState<'admin' | 'user'>('user')
@@ -227,11 +228,25 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
     if (id) {
       editCard(id, data, currentUserId)
     } else {
-      addCard(data.title, data.description, data.column, data.priority, data.assignedTo, currentUserId)
+      addCard(
+        data.title,
+        data.description,
+        data.column,
+        data.priority,
+        data.assignedTo,
+        currentUserId,
+        currentUser?.role ?? 'user',
+      )
     }
   }
 
   const handleCreateTaskTrigger = (columnKey?: ColumnKey) => {
+    if (currentUser?.role !== 'admin') {
+      setToast('Only admins can create tasks.')
+      window.setTimeout(() => setToast(null), 2500)
+      return
+    }
+
     setEditingCard(null)
     setDefaultColumn(columnKey)
     setIsModalOpen(true)
@@ -255,6 +270,25 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
     () => (card: any) => currentUser?.role === 'admin' || card.createdBy === currentUserId,
     [currentUser?.role, currentUserId],
   )
+
+  const visibleCards = useMemo(
+    () =>
+      currentUser?.role === 'admin'
+        ? state.cards
+        : state.cards.filter((card) => card.assignedTo === currentUserId || card.createdBy === currentUserId),
+    [currentUser?.role, currentUserId, state.cards],
+  )
+
+  if (isLoading) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <h1>Loading</h1>
+          <p>Connecting to the task database...</p>
+        </section>
+      </main>
+    )
+  }
 
   if (!currentUser) {
     return (
@@ -296,9 +330,10 @@ function AppShell({ board }: { board: ReturnType<typeof useBoardReducer> }) {
         </div>
       ) : (
         <UserPanel
-          cards={state.cards}
+          cards={visibleCards}
           users={state.users}
           currentUserId={currentUserId}
+          canCreateTask={currentUser.role === 'admin'}
           columns={COLUMNS}
           filters={filters}
           onFiltersChange={setFilters}

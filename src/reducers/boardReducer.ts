@@ -9,7 +9,9 @@ export type BoardState = {
 }
 
 export type BoardAction =
+  | { type: 'SET_BOARD'; payload: Pick<BoardState, 'cards' | 'users' | 'logs'> }
   | { type: 'ADD_CARD'; payload: { title: string; description: string; column: ColumnKey; priority: Priority; assignedTo: string; createdBy: string } }
+  | { type: 'ADD_CARD_RECORD'; payload: { card: Card; actor: string } }
   | { type: 'EDIT_CARD'; payload: { id: string; updates: Partial<Pick<Card, 'title' | 'description' | 'priority' | 'assignedTo' | 'column'>>; actor: string } }
   | { type: 'DELETE_CARD'; payload: { id: string; actor: string } }
   | { type: 'MOVE_CARD'; payload: { id: string; from: ColumnKey; to: ColumnKey; actor: string } }
@@ -43,6 +45,14 @@ function createLog(message: string): ActivityLog {
 
 function reducer(state: BoardState, action: BoardAction): BoardState {
   switch (action.type) {
+    case 'SET_BOARD': {
+      return {
+        cards: action.payload.cards,
+        users: action.payload.users,
+        logs: action.payload.logs,
+        pendingMoves: {},
+      }
+    }
     case 'ADD_CARD': {
       const card: Card = {
         id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -59,6 +69,16 @@ function reducer(state: BoardState, action: BoardAction): BoardState {
         cards: [card, ...state.cards],
         logs: [
           createLog(`${action.payload.createdBy} created "${card.title}" in ${action.payload.column.replace(/^./, s => s.toUpperCase())}.`),
+          ...state.logs,
+        ],
+      }
+    }
+    case 'ADD_CARD_RECORD': {
+      return {
+        ...state,
+        cards: [action.payload.card, ...state.cards],
+        logs: [
+          createLog(`${action.payload.actor} created "${action.payload.card.title}" in ${action.payload.card.column.replace(/^./, s => s.toUpperCase())}.`),
           ...state.logs,
         ],
       }

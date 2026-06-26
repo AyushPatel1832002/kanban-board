@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    String @id
+  name  String
+  email String @unique
+  role  String
+
+  assignedCards Card[] @relation("AssignedCards")
+  createdCards  Card[] @relation("CreatedCards")
+}
+
+model Card {
+  id          String   @id
+  title       String
+  description String
+  assignedTo  String?
+  priority    String
+  column      String
+  createdAt   DateTime @default(now())
+  createdBy   String
+
+  assignee User? @relation("AssignedCards", fields: [assignedTo], references: [id], onDelete: SetNull)
+  creator  User  @relation("CreatedCards", fields: [createdBy], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id        String   @id
+  timestamp DateTime @default(now())
+  message   String
+}
